@@ -5,7 +5,7 @@ from mysql.connector import connect, Error
 from mutagen.mp3 import MP3
 
 USERNAME = "Venrier"
-PASSWORD = "jmbwdpro1"
+PASSWORD = "smkn21"
 
 db = connect(
     host="localhost",
@@ -49,14 +49,24 @@ def format_time(seconds):
     return f"{minutes:02}:{seconds:02}"
 
 def update_music_duration():
+    global current_position
     if pygame.mixer.music.get_busy():
         audio = MP3(r"C:\Users\PF3K2\OneDrive\Music\Playlists/LeeHi - ONLY (Lyrics).mp3")
         total_duration = audio.info.length
         current_time = pygame.mixer.music.get_pos() / 1000
-        label_duration.config(
-            text=f"Current Time: {format_time(current_time)} / Total Duration: {format_time(total_duration)}"
-        )
-        root.after(1000, update_music_duration)
+        
+
+        if current_time >= total_duration:
+            pygame.mixer.music.stop()
+            label_duration.config(text="Musik Selesai")
+            btn_play.config(state=tk.NORMAL)
+            btn_pause.config(state=tk.DISABLED)
+            btn_unpause.config(state=tk.DISABLED)
+        else:
+            label_duration.config(
+                text=f"Current Time: {format_time(current_time)} / Total Duration: {format_time(total_duration)}"
+            )
+            root.after(1000, update_music_duration)
 
 def login():
     username_input = entry_username.get()
@@ -78,11 +88,9 @@ def tambah_barang():
     except ValueError:
         messagebox.showerror("Input Error", "Harga dan Stok harus berupa angka!")
         return
-
     if not kode_barang or not nama_barang:
         messagebox.showerror("Input Error", "Kode Barang dan Nama Barang wajib diisi!")
         return
-
     try:
         cursor = db.cursor()
         query = """INSERT INTO barang_yang_dijual (kode_barang, nama_barang, harga_barang, stok_barang) VALUES (%s, %s, %s, %s)"""
@@ -118,7 +126,6 @@ def ubah_barang():
     if not selected_item:
         messagebox.showerror("Error", "Pilih barang yang ingin diubah!")
         return
-
     kode_barang = tree.item(selected_item, "values")[0]
     nama_barang = entry_nama.get()
     try:
@@ -127,11 +134,9 @@ def ubah_barang():
     except ValueError:
         messagebox.showerror("Input Error", "Harga dan Stok harus berupa angka!")
         return
-
     if not nama_barang:
         messagebox.showerror("Input Error", "Nama Barang wajib diisi!")
         return
-
     confirm = messagebox.askyesno("Konfirmasi", f"Apakah Anda yakin ingin mengubah data barang dengan kode {kode_barang}?")
     if confirm:
         try:
@@ -158,6 +163,31 @@ def tampilkan_barang():
     except Error as e:
         messagebox.showerror("Database Error", f"Error: {e}")
 
+
+def cari_barang():
+    keyword = entry_pencarian.get().strip()
+    try:
+        cursor = db.cursor()
+        query = """
+        SELECT kode_barang, nama_barang, harga_barang, stok_barang 
+        FROM barang_yang_dijual 
+        WHERE kode_barang LIKE %s OR nama_barang LIKE %s
+        """
+        search_pattern = f"%{keyword}%"
+        cursor.execute(query, (search_pattern, search_pattern))
+        records = cursor.fetchall()
+        for row in tree.get_children():
+            tree.delete(row)
+        if records:
+            for i, record in enumerate(records):
+                tag = 'odd' if i % 2 == 0 else 'even'
+                tree.insert("", tk.END, values=record, tags=(tag,))
+            messagebox.showinfo("Pencarian", f"Ditemukan {len(records)} barang")
+        else:
+            messagebox.showinfo("Pencarian", "Tidak ada barang yang ditemukan")
+    except Error as e:
+        messagebox.showerror("Database Error", f"Error: {e}")
+
 def clear_entries():
     entry_kode.delete(0, tk.END)
     entry_nama.delete(0, tk.END)
@@ -170,7 +200,8 @@ def keluar_aplikasi():
     root.destroy()
 
 def main_app():
-    global entry_kode, entry_nama, entry_harga, entry_stok, tree, root, label_duration
+    global entry_kode, entry_nama, entry_harga, entry_stok, entry_pencarian, tree, root, label_duration
+    global btn_play, btn_pause, btn_unpause
 
     root = tk.Tk()
     root.title("Aplikasi Database Barang")
@@ -183,7 +214,6 @@ def main_app():
     header_label = tk.Label(root, text="Moeara Store", font=("Arial", 24, "bold"), fg="black", height=2)
     header_label.pack(fill="x")
 
-    # Frame for inputs
     frame_input = tk.Frame(root, bg="#f0f8ff", pady=10)
     frame_input.pack(pady=10)
 
@@ -215,6 +245,19 @@ def main_app():
     btn_ubah = tk.Button(frame_input, text="Ubah Barang", command=ubah_barang, bg="#2196F3", fg="white", font=font_label, width=20)
     btn_ubah.grid(row=3, column=0, columnspan=4, pady=10)
 
+    frame_pencarian = tk.Frame(root, bg="#f0f8ff", pady=10)
+    frame_pencarian.pack(pady=10)
+
+    tk.Label(frame_pencarian, text="Cari Barang:", font=font_label, bg="#f0f8ff").grid(row=0, column=0, padx=10, pady=5, sticky="e")
+    entry_pencarian = tk.Entry(frame_pencarian, font=font_entry, width=30)
+    entry_pencarian.grid(row=0, column=1, padx=10, pady=5, sticky="w")
+
+    btn_cari = tk.Button(frame_pencarian, text="Cari", command=cari_barang, bg="#2196F3", fg="white", font=font_label, width=10)
+    btn_cari.grid(row=0, column=2, padx=10, pady=5)
+
+    btn_reset = tk.Button(frame_pencarian, text="Reset", command=tampilkan_barang, bg="#FF9800", fg="white", font=font_label, width=10)
+    btn_reset.grid(row=0, column=3, padx=10, pady=5)
+
     frame_music = tk.Frame(root, bg="#f0f8ff", pady=10)
     frame_music.pack(pady=10, fill="x")
 
@@ -222,13 +265,13 @@ def main_app():
     frame_music.grid_columnconfigure(1, weight=1)
     frame_music.grid_columnconfigure(2, weight=1)
 
-    btn_play = tk.Button(frame_music, text="\u25B6 Play Music", command=play_music, bg="#4CAF50", fg="white", font=font_label)
+    btn_play = tk.Button(frame_music, text="▶️ Putar", command=play_music, bg="#4CAF50", fg="white", font=font_label)
     btn_play.grid(row=0, column=0, padx=10, pady=5)
 
-    btn_pause = tk.Button(frame_music, text="\u23F8 Pause Music", command=pause_music, bg="#f44336", fg="white", font=font_label)
+    btn_pause = tk.Button(frame_music, text="⏸️ Jeda", command=pause_music, bg="#f44336", fg="white", font=font_label)
     btn_pause.grid(row=0, column=1, padx=10, pady=5)
 
-    btn_unpause = tk.Button(frame_music, text="\u25B6 Resume Music", command=unpause_music, bg="#2196F3", fg="white", font=font_label)
+    btn_unpause = tk.Button(frame_music, text="▶️ Lanjutkan", command=unpause_music, bg="#2196F3", fg="white", font=font_label)
     btn_unpause.grid(row=0, column=2, padx=10, pady=5)
 
     label_duration = tk.Label(frame_music, text="Current Time: 00:00 / Total Duration: 00:00", bg="#f0f8ff", font=font_label)
